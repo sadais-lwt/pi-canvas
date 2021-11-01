@@ -1,6 +1,8 @@
 <template>
-  <div ref="root" :class="[customClass, 'wrapper']" :style="[customStyle]">
+  <view ref="root" :class="[customClass, 'wrapper']" :style="[customStyle]">
     <canvas
+      :style="[canvasStyle]"
+      type="2d"
       ref="canvas"
       class="content"
       :id="canvasId"
@@ -16,14 +18,16 @@
       @mouseup="end"
     ></canvas>
     <canvas
+      type="2d"
       ref="cropCanvas"
       class="copy"
+      :style="[cropStyle]"
       :id="cropId"
       :canvas-id="cropId"
       :width="cropw"
       :height="croph"
     ></canvas>
-  </div>
+  </view>
 </template>
 <script>
 export default {
@@ -84,6 +88,14 @@ export default {
       croph: 0, // 裁剪画布的高度
     }
   },
+  computed: {
+    canvasStyle() {
+      return { width: `${this.canvasw}px`, height: `${this.canvash}px` }
+    },
+    cropStyle() {
+      return { width: `${this.cropw}px`, height: `${this.croph}px` }
+    },
+  },
   created() {
     this.$nextTick(() => {
       this.initCanvas()
@@ -142,13 +154,23 @@ export default {
         this.initPen()
         this.ctx.clearRect(0, 0, this.canvasw, this.canvash)
         this.ctx.fillRect(0, 0, this.canvasw, this.canvash)
+        if (window.uni) {
+          this.ctx.draw()
+        }
       })
     },
     initPen() {
       // 初始化画笔
-      this.ctx.fillStyle = this.bgColor
-      this.ctx.strokeStyle = this.color
-      this.ctx.lineWidth = this.lineWidth
+      console.log('初始化画笔')
+      if (window.uni) {
+        this.ctx.setFillStyle(this.bgColor)
+        this.ctx.setStrokeStyle(this.color)
+        this.ctx.setLineWidth(this.lineWidth)
+      } else {
+        this.ctx.fillStyle = this.bgColor
+        this.ctx.strokeStyle = this.color
+        this.ctx.lineWidth = this.lineWidth
+      }
     },
     initRange() {
       // 记录画布上左上角的点 s: start
@@ -285,6 +307,9 @@ export default {
       this.ctx.beginPath()
       this.ctx.moveTo(x, y)
       this.ctx.stroke()
+      if (window.uni) {
+        this.ctx.draw(true)
+      }
       this.isBegin = true
       this.updateRange(x, y)
     },
@@ -298,6 +323,9 @@ export default {
 
       this.ctx.lineTo(x, y)
       this.ctx.stroke()
+      if (window.uni) {
+        this.ctx.draw(true)
+      }
       this.updateRange(x, y)
     },
     end(e) {
