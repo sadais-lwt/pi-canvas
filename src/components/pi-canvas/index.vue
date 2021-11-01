@@ -97,9 +97,18 @@ export default {
     },
   },
   created() {
-    this.$nextTick(() => {
-      this.initCanvas()
-    })
+    if (!window.uni) {
+      this.$nextTick(() => {
+        this.initCanvas()
+      })
+    }
+  },
+  onReady() {
+    if (window.uni) {
+      this.$nextTick(() => {
+        this.initCanvas()
+      })
+    }
   },
   methods: {
     generateId() {
