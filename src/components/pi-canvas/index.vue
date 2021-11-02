@@ -135,7 +135,9 @@ export default {
         this.canvash = parseInt(style.height, 10)
         const canvas = this.$refs.canvas
         this.ctx = canvas.getContext('2d')
-        this.clear()
+        this.$nextTick(() => {
+          this.clear()
+        })
       } else {
         // uni环境：无法操作dom 只能通过它提供的API获取布局信息
         const query = uni.createSelectorQuery().in(this)
