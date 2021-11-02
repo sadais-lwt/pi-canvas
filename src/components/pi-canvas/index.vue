@@ -5,7 +5,6 @@
       type="2d"
       ref="canvas"
       class="content"
-      :id="canvasId"
       :canvas-id="canvasId"
       :width="canvasw"
       :height="canvash"
@@ -22,7 +21,6 @@
       ref="cropCanvas"
       class="copy"
       :style="[cropStyle]"
-      :id="cropId"
       :canvas-id="cropId"
       :width="cropw"
       :height="croph"
@@ -89,26 +87,26 @@ export default {
     }
   },
   computed: {
+    isUni() {
+      return window.uni != null
+    },
     canvasStyle() {
-      return { width: `${this.canvasw}px`, height: `${this.canvash}px` }
+      return {
+        width: `${this.canvasw}px`,
+        height: `${this.canvash}px`,
+      }
     },
     cropStyle() {
-      return { width: `${this.cropw}px`, height: `${this.croph}px` }
+      return {
+        width: `${this.cropw}px`,
+        height: `${this.croph}px`,
+      }
     },
   },
   created() {
-    if (!window.uni) {
-      this.$nextTick(() => {
-        this.initCanvas()
-      })
-    }
-  },
-  onReady() {
-    if (window.uni) {
-      this.$nextTick(() => {
-        this.initCanvas()
-      })
-    }
+    this.$nextTick(() => {
+      this.initCanvas()
+    })
   },
   methods: {
     generateId() {
@@ -129,7 +127,7 @@ export default {
     initCanvas() {
       this.canvasId = this.generateId()
       this.cropId = this.generateId()
-      if (!window.uni) {
+      if (!this.isUni) {
         // 非uni环境
         const root = this.$refs.root
         const style = window.getComputedStyle(root)
@@ -140,15 +138,16 @@ export default {
         this.clear()
       } else {
         // uni环境：无法操作dom 只能通过它提供的API获取布局信息
-        const that = this
         const query = uni.createSelectorQuery().in(this)
         query
           .select('.wrapper')
           .boundingClientRect((res) => {
-            that.canvasw = res.width
-            that.canvash = res.height
-            that.ctx = uni.createCanvasContext(that.canvasId, that)
-            that.clear()
+            this.canvasw = res.width - 2
+            this.canvash = res.height - 2
+            this.$nextTick(() => {
+              this.ctx = uni.createCanvasContext(this.canvasId, this)
+              this.clear()
+            })
           })
           .exec()
       }
@@ -158,20 +157,17 @@ export default {
      * 清空画布内容
      */
     clear() {
-      this.$nextTick(() => {
-        this.initRange()
-        this.initPen()
-        this.ctx.clearRect(0, 0, this.canvasw, this.canvash)
-        this.ctx.fillRect(0, 0, this.canvasw, this.canvash)
-        if (window.uni) {
-          this.ctx.draw()
-        }
-      })
+      this.initRange()
+      this.initPen()
+      this.ctx.clearRect(0, 0, this.canvasw, this.canvash)
+      this.ctx.fillRect(0, 0, this.canvasw, this.canvash)
+      if (this.isUni) {
+        this.ctx.draw()
+      }
     },
     initPen() {
       // 初始化画笔
-      console.log('初始化画笔')
-      if (window.uni) {
+      if (this.isUni) {
         this.ctx.setFillStyle(this.bgColor)
         this.ctx.setStrokeStyle(this.color)
         this.ctx.setLineWidth(this.lineWidth)
@@ -187,11 +183,32 @@ export default {
       // 记录画布右下角的点 e: end
       this.e = { x: 0, y: 0 }
     },
+    async getImageData(x, y, w, h) {
+      if (this.isUni) {
+        return new Promise((resolve) => {
+          uni.canvasGetImageData({
+            canvasId: this.canvasId,
+            x,
+            y,
+            width: w,
+            height: h,
+            success: (res) => {
+              resolve(res.data)
+            },
+            fail: (err) => {
+              resolve(null)
+            },
+          })
+        })
+      } else {
+        return this.ctx.getImageData(x, y, w, h)
+      }
+    },
     /**
      * @vuese
      * 裁剪画布内容
      */
-    crop() {
+    async crop() {
       if (this.s.x === Number.MAX_VALUE) {
         // 标明画布无内容 不进行裁剪操作
         return
@@ -209,11 +226,11 @@ export default {
         y1 = y1 > this.canvash ? this.canvash : y1
 
         // 获取裁剪区域的RGBA像素点数据
-        const imageData = this.ctx.getImageData(x, y, x1 - x, y1 - y)
+        const imageData = await this.getImageData(x, y, x1 - x, y1 - y)
         this.emitCrop(imageData, x1 - x, y1 - y)
       } else {
         // 直接获取整张画布区域的像素点数据
-        const imageData = this.ctx.getImageData(
+        const imageData = await this.getImageData(
           0,
           0,
           this.canvasw,
@@ -224,30 +241,32 @@ export default {
     },
     async getBase64(imageData, w, h) {
       // 原理：将imageData放入裁剪画布中，然后即可生成base64
-      if (window.uni) {
+      if (this.isUni) {
         // uni环境下 按uni提供的API进行操作
-        const that = this
         return new Promise((resolve) => {
           uni.canvasPutImageData(
             {
-              canvasId: that.cropId,
+              canvasId: this.cropId,
               data: imageData,
               x: 0,
               y: 0,
-              success: () => {
+              width: w,
+              height: h,
+              success: (res) => {
                 uni.canvasToTempFilePath({
-                  canvasId: that.cropId,
+                  canvasId: this.cropId,
                   x: 0,
                   y: 0,
-                  width: w,
-                  height: h,
                   success: (res) => {
                     resolve(res.tempFilePath)
                   },
-                  fail: () => {
+                  fail: (err) => {
                     resolve('')
                   },
                 })
+              },
+              fail: (err) => {
+                resolve('')
               },
             },
             this
@@ -263,12 +282,14 @@ export default {
       }
     },
     emitCrop(imageData, w, h) {
+      if (!imageData) {
+        return
+      }
       this.cropw = w
       this.croph = h
-      this.$nextTick(async () => {
+      setTimeout(async () => {
         // $nextTick的目的是为了让裁剪画布的宽高生效后 再进行操作
         const base64 = await this.getBase64(imageData, w, h)
-
         const results = base64.match(/data:(.*?);.*?,(.*)/)
         const mineType = results[1]
         const suffix = mineType.split('/')[1]
@@ -288,7 +309,7 @@ export default {
           height: h,
           style: { width: `${w}px`, height: `${h}px` },
         })
-      })
+      }, 500)
     },
     /**
      * 随着画笔移动，不断调用此方法更新：包裹内容的矩形的左上角&右下角的坐标
@@ -306,42 +327,56 @@ export default {
       }
     },
     start(e) {
-      console.log('start=========', e)
       // 适配移动端的写法: e.touches移动端才有
-      const touches = (e && e.touches) || []
-      const { offsetX: x, offsetY: y } = touches[0] || e
-      this.ctx.save()
-
+      const touches = (e && e.changedTouches) || []
+      let x = 0,
+        y = 0
+      const touch = touches[0]
+      if (/^touch/.test(e.type)) {
+        x = touch.x
+        y = touch.y
+      } else {
+        x = e.offsetX
+        y = e.offsetY
+      }
       // 为了清空之前残留的路径
       this.ctx.beginPath()
       this.ctx.moveTo(x, y)
       this.ctx.stroke()
-      if (window.uni) {
+      if (this.isUni) {
         this.ctx.draw(true)
       }
       this.isBegin = true
       this.updateRange(x, y)
+      this.prev = { x, y }
     },
     move(e) {
       if (!this.isBegin) {
         return
       }
-      console.log('move======', e)
-      const touches = (e && e.touches) || []
-      const { offsetX: x, offsetY: y } = touches[0] || e
-
+      let x = 0,
+        y = 0
+      const touches = (e && e.changedTouches) || []
+      const touch = touches[0]
+      if (/^touch/.test(e.type)) {
+        x = touch.x
+        y = touch.y
+      } else {
+        x = e.offsetX
+        y = e.offsetY
+      }
+      this.ctx.moveTo(this.prev.x, this.prev.y)
       this.ctx.lineTo(x, y)
       this.ctx.stroke()
-      if (window.uni) {
+      if (this.isUni) {
         this.ctx.draw(true)
       }
       this.updateRange(x, y)
+      this.prev = { x, y }
     },
     end(e) {
-      console.log('end======', e)
-      this.move(e)
+      //this.move(e)
       this.isBegin = false
-      this.ctx.restore()
     },
   },
 }
@@ -356,9 +391,8 @@ export default {
 }
 
 .content {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
+  margin: 0 auto;
 }
 
 .copy {

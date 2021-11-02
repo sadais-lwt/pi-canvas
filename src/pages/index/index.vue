@@ -3,12 +3,18 @@
     <view class="tool">
       <button class="item" @click="handleClear">清除</button>
       <button class="item" @click="handleCrop">导出图片</button>
-      <checkbox class="item" v-model="minimal" />是否最小化空白区域
+      <checkbox-group @change="handleCheck">
+        <checkbox
+          class="item"
+          :value="'true'"
+          :checked="minimal"
+        />是否最小化空白区域
+      </checkbox-group>
     </view>
     <pi-canvas
       ref="picanvas"
-      :minimal="minimal === 'true'"
-      style="width: 100%; height: 200rpx"
+      :minimal="minimal"
+      style="width: 90%; height: 200rpx"
       @export="handleExport"
     />
     <image :src="src" :style="[style, { marginTop: '32rpx' }]" />
@@ -25,11 +31,15 @@ export default {
     return {
       src: '',
       style: {},
-      minimal: 'false',
+      minimal: false,
     }
   },
-  onLoad() {},
+
   methods: {
+    handleCheck(e) {
+      const val = e.detail.value[0]
+      this.minimal = val === 'true'
+    },
     handleClear() {
       this.$refs.picanvas.clear()
     },
@@ -37,6 +47,7 @@ export default {
       this.$refs.picanvas.crop()
     },
     handleExport(res) {
+      console.log(`export result`, res)
       this.src = res.base64
       this.style = res.style
     },
