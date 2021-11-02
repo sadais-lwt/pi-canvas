@@ -309,7 +309,7 @@ export default {
           height: h,
           style: { width: `${w}px`, height: `${h}px` },
         })
-      }, 500)
+      }, 100)
     },
     /**
      * 随着画笔移动，不断调用此方法更新：包裹内容的矩形的左上角&右下角的坐标
